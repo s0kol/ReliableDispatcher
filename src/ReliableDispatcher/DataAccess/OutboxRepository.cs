@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace ReliableDispatcher.DataAccess
 {
-    public class OutboxRepository
+    public class OutboxRepository : IOutboxRepository
     {
         private readonly string _connectionString;
 

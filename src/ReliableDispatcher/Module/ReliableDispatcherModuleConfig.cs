@@ -1,4 +1,5 @@
 ﻿using Castle.Windsor;
+using System;
 
 namespace ReliableDispatcher.Module
 {
@@ -7,5 +8,6 @@ namespace ReliableDispatcher.Module
         public IWindsorContainer Container { get; set; }
 
         public string OutboxDatabaseConnectionString { get; set; }
+        public Func<IOutboxMessage, bool> DispatchPipeline { get; set; }
     }
 }

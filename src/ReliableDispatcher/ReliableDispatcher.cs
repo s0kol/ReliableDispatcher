@@ -6,17 +6,17 @@ using ReliableDispatcher.DataAccess;
 
 namespace ReliableDispatcher
 {
-    public class ReliableDispatcher
+    public class ReliableDispatcher : IReliableDispatcher
     {
         internal event EventHandler<Guid> OnMarkingAsDispatched;
         internal event EventHandler<Guid> OnDispatching;
 
         private readonly Action<IOutboxMessage> _messageHandler;
         private readonly ConcurrentQueue<Guid> _messagesToDispatch;
-        private readonly OutboxRepository _outboxRepository;
+        private readonly IOutboxRepository _outboxRepository;
         private string _currentTransactionId = null;
 
-        public ReliableDispatcher(Action<IOutboxMessage> messageHandler, OutboxRepository outboxRepository)
+        public ReliableDispatcher(Action<IOutboxMessage> messageHandler, IOutboxRepository outboxRepository)
         {
             _messageHandler = messageHandler;
             _outboxRepository = outboxRepository;
