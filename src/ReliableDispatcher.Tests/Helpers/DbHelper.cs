@@ -25,7 +25,7 @@ namespace ReliableDispatcher.Tests.Helpers
                 ON PRIMARY (NAME={dbName}_data, FILENAME = '{mdfPath}')
                 LOG ON (NAME={dbName}_log, FILENAME = '{ldfPath}')");
 
-            var connectionStringTemplate = $@"Server={_defaults.DefaultServerClause};Integrated Security=True;Connect Timeout=30";
+            var connectionStringTemplate = $@"Server={_defaults.DefaultServerClause};Integrated Security=True;Connect Timeout=30;Application Name={_defaults.DefaultApplicationNameClause}";
             
             using (var connection = new SqlConnection(connectionStringTemplate))
             {

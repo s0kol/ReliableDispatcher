@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Linq;
 
@@ -105,6 +106,19 @@ namespace ReliableDispatcher.DataAccess
                     .QuerySingleOrDefault(query, new { messageId });
 
                 return result != null;
+            }
+        }
+
+        public IEnumerable<Guid> GetMessagesToDispatch(int attemptThreshold = 10)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                return connection.Query<Guid>(
+                        "SELECT Id " +
+                        "FROM Outbox WITH(NOLOCK) " +
+                        "WHERE DispatchedDate IS NULL " +
+                        "AND DispatchAttempts < @attemptThreshold", new { attemptThreshold })
+                    .ToList();
             }
         }
     }

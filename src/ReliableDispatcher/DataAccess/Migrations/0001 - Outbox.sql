@@ -3,6 +3,7 @@
     [Body]             XML              NOT NULL,
     [DispatchedDate]   DATETIME2 (7)    NULL,
     [DispatchAttempts] INT              DEFAULT ((0)) NOT NULL,
+	[CreatedDate]       DATETIME2 (7)    DEFAULT (GETDATE()) NOT NULL,
     CONSTRAINT [PK_Outbox] PRIMARY KEY CLUSTERED ([Id] ASC)
 );
 

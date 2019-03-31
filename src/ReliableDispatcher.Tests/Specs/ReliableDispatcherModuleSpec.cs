@@ -1,5 +1,6 @@
 ﻿using Castle.Windsor;
 using NUnit.Framework;
+using ReliableDispatcher.DataAccess;
 using ReliableDispatcher.DataAccess.Migrations;
 using ReliableDispatcher.Tests.Helpers;
 using ReliableDispatcher.Tests.Samples;
@@ -39,7 +40,20 @@ namespace ReliableDispatcher.Tests.Specs
         {
             var container = new WindsorContainer();
             var messageId = Guid.NewGuid();
-            Func<IOutboxMessage, bool> handlingStep = message => throw new InvalidOperationException();
+            var failuresToGo = 2;
+            Func<IOutboxMessage, bool> handlingStep = message => {
+
+                if (failuresToGo > 0)
+                {
+                    Interlocked.Decrement(ref failuresToGo);
+
+                    throw new InvalidOperationException();
+                }
+
+                _queue.Add(message);
+
+                return true;
+            };
 
             this.Given(_ => AnApplicationWithTheReliableModuleWasStarted(handlingStep, container))
                 .When(_ => AMessageFailedToBeDispatched(container, messageId))
@@ -49,7 +63,7 @@ namespace ReliableDispatcher.Tests.Specs
 
         private void ItShouldBePickedUpByAnOutboxMonitorAndDispatched(Guid messageId)
         {
-            var message = _queue.Take(new CancellationTokenSource(1000).Token);
+            var message = _queue.Take(new CancellationTokenSource(2000).Token);
 
             Assert.AreEqual(messageId, message.Id);
         }
@@ -58,9 +72,9 @@ namespace ReliableDispatcher.Tests.Specs
         {
             using (var ts = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted }))
             {
-                var dispatcher = container.Resolve<IReliableDispatcher>();
+                var queue = container.Resolve<IReliableMessageQueue>();
 
-                dispatcher.EnqueueMessage(messageId, Guid.NewGuid().ToString());
+                queue.EnqueueMessage(messageId, Guid.NewGuid().ToString());
 
                 ts.Complete();
             }
@@ -87,6 +101,7 @@ namespace ReliableDispatcher.Tests.Specs
                         return result;
                     }
                 };
+                config.DispatchWorker.OutboxMonitoringInterval = TimeSpan.FromMilliseconds(100);
             });
 
             application.Start();

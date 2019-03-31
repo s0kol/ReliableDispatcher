@@ -22,7 +22,11 @@ namespace ReliableDispatcher.Module
             DispatchPipeline = message => throw new InvalidOperationException("No handlers registered in the DispatchPipeline"),
             Container = new WindsorContainer(),
             OutboxDatabaseConnectionString = ConfigurationManager
-                .ConnectionStrings[nameof(ReliableDispatcherModuleConfig.OutboxDatabaseConnectionString)]?.ConnectionString
+                .ConnectionStrings[nameof(ReliableDispatcherModuleConfig.OutboxDatabaseConnectionString)]?.ConnectionString,
+            DispatchWorker = new ReliableDispatcherModuleConfig.DispatchWorkerConfig
+            {
+                OutboxMonitoringInterval = TimeSpan.FromSeconds(10)
+            }
         };
 
         public void Start()
@@ -30,14 +34,24 @@ namespace ReliableDispatcher.Module
             _config.Container.Register(
                 Component.For<IOutboxRepository>()
                     .ImplementedBy<OutboxRepository>()
-                    .DependsOn(Dependency.OnValue("connectionString", _config.OutboxDatabaseConnectionString)));
+                    .DependsOn(Dependency.OnValue("connectionString", _config.OutboxDatabaseConnectionString))
+                    .LifestyleTransient());
 
             Action<IOutboxMessage> handler = message => _config.DispatchPipeline(message);
 
             _config.Container.Register(
                 Component.For<IReliableDispatcher>()
                     .ImplementedBy<ReliableDispatcher>()
-                    .DependsOn(Dependency.OnValue<Action<IOutboxMessage>>(handler)));
+                    .DependsOn(Dependency.OnValue<Action<IOutboxMessage>>(handler))
+                    .LifestyleTransient());
+
+            _config.Container.Register(
+                Component.For<IReliableMessageQueue>()
+                    .ImplementedBy<ReliableMessageQueue>()
+                    .LifestyleTransient());
+
+            new DispatchWorker(_config.Container.Resolve<IReliableDispatcher>())
+                .Start((int) _config.DispatchWorker.OutboxMonitoringInterval.TotalMilliseconds);
         }
     }
 }

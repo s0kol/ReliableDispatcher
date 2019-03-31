@@ -16,12 +16,12 @@ using TestStack.BDDfy;
 namespace ReliableDispatcher.Tests.Specs
 {
     [TestFixture]
-    class ReliableDispatcherSpec
+    class ReliableMessageQueueSpec
     {
         private string _connectionString;
-        private BlockingCollection<IOutboxMessage> _queue;
-        private ReliableDispatcher _dispatcher;
-        private OutboxRepository _outboxRepository;
+        private BlockingCollection<IOutboxMessage> _destinationQueue;
+        private ReliableMessageQueue _dispatchQueue;
+        
         private NUnitHelper helper = new NUnitHelper
         {
             DefaultServerClause = @"(LocalDB)\MSSQLLocalDB"
@@ -33,38 +33,39 @@ namespace ReliableDispatcher.Tests.Specs
             helper.DbHelper().CreateDatabase(out _connectionString);
             DatabaseMigrator.RunMigrations(_connectionString);
 
-            _queue = new BlockingCollection<IOutboxMessage>(1);
-            _outboxRepository = new OutboxRepository(_connectionString);
-            _dispatcher = new ReliableDispatcher(message => _queue.Add(message), _outboxRepository);
+            _destinationQueue = new BlockingCollection<IOutboxMessage>(1);
+            _dispatchQueue = new ReliableMessageQueue(
+                new ReliableDispatcher(message => _destinationQueue.Add(message),
+                new OutboxRepository(_connectionString)));
         }
 
         [Test]
-        public void ReliableDispatcher_should_dispatch_enqueued_messages_after_transaction_has_committed()
+        public void ReliableMessageQueue_should_dispatch_enqueued_messages_after_transaction_has_committed()
         {
             TransactionScope ts = null;
             Guid messageId = default(Guid);
 
-            this.Given(_ => AMessageHasBeenEnqueuedDuringABusinessLogicTransaction(_dispatcher, out ts, out messageId))
+            this.Given(_ => AMessageHasBeenEnqueuedDuringABusinessLogicTransaction(_dispatchQueue, out ts, out messageId))
                     //.Then(_ => TheMessageShouldBeSavedInTheOutboxTable(messageId))
                 .When(_ => TheTransactionCommits(ts))
-                    .Then(_ => TheEnqueuedMessageShouldBeDispatchedOnASeparateThread(_queue, messageId))
+                    .Then(_ => TheEnqueuedMessageShouldBeDispatchedOnASeparateThread(_destinationQueue, messageId))
                 .BDDfy();
         }
 
         [Test]
-        public void ReliableDispatcher_shouldnt_dispatch_messages_if_transaction_is_rolledback()
+        public void ReliableMessageQueue_shouldnt_dispatch_messages_if_transaction_is_rolledback()
         {
             TransactionScope ts = null;
             Guid messageId = default(Guid);
 
-            this.Given(_ => AMessageHasBeenEnqueuedDuringABusinessLogicTransaction(_dispatcher, out ts, out messageId))
+            this.Given(_ => AMessageHasBeenEnqueuedDuringABusinessLogicTransaction(_dispatchQueue, out ts, out messageId))
                 .When(_ => TheTransactionRollsBack(ts))
-                    .Then(_ => TheEnqueuedMessageShouldntBeDispatched(_queue, messageId))
+                    .Then(_ => TheEnqueuedMessageShouldntBeDispatched(_destinationQueue, messageId))
                 .BDDfy();
         }
 
         [Test]
-        public void ReliableDispatcher_instances_should_not_block_each_other()
+        public void ReliableMessageQueue_instances_should_not_block_each_other()
         {
             throw new NotImplementedException();
         }
@@ -103,13 +104,13 @@ namespace ReliableDispatcher.Tests.Specs
             ts.Dispose();
         }
 
-        private static void AMessageHasBeenEnqueuedDuringABusinessLogicTransaction(ReliableDispatcher dispatcher, out TransactionScope ts, out Guid messageId)
+        private static void AMessageHasBeenEnqueuedDuringABusinessLogicTransaction(ReliableMessageQueue queue, out TransactionScope ts, out Guid messageId)
         {
             ts = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions() { IsolationLevel = IsolationLevel.ReadCommitted });
 
             messageId = Guid.NewGuid();
 
-            dispatcher.EnqueueMessage(messageId, "Message Body");
+            queue.EnqueueMessage(messageId, "Message Body");
         }
     }
 }

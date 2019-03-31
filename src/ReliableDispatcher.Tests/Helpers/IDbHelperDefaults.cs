@@ -7,5 +7,7 @@
         string DefaultMdfPath { get; }
 
         string DefaultServerClause { get; }
+
+        string DefaultApplicationNameClause { get; }
     }
 }

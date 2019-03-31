@@ -9,5 +9,11 @@ namespace ReliableDispatcher.Module
 
         public string OutboxDatabaseConnectionString { get; set; }
         public Func<IOutboxMessage, bool> DispatchPipeline { get; set; }
+        public DispatchWorkerConfig DispatchWorker { get; set; }
+
+        public class DispatchWorkerConfig
+        {
+            public TimeSpan OutboxMonitoringInterval { get; set; }
+        }
     }
 }

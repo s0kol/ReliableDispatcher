@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Transactions;
 using ReliableDispatcher.DataAccess;
@@ -12,48 +13,26 @@ namespace ReliableDispatcher
         internal event EventHandler<Guid> OnDispatching;
 
         private readonly Action<IOutboxMessage> _messageHandler;
-        private readonly ConcurrentQueue<Guid> _messagesToDispatch;
+        
         private readonly IOutboxRepository _outboxRepository;
-        private string _currentTransactionId = null;
 
         public ReliableDispatcher(Action<IOutboxMessage> messageHandler, IOutboxRepository outboxRepository)
         {
             _messageHandler = messageHandler;
             _outboxRepository = outboxRepository;
-
-            _messagesToDispatch = new ConcurrentQueue<Guid>();
         }
 
         public void EnqueueMessage(Guid messageId, string messageBody)
         {
-            EnsureTransaction();
-
             _outboxRepository.CreateMessage(messageId, messageBody);
-
-            _messagesToDispatch.Enqueue(messageId);
         }
 
-        private void EnsureTransaction()
+        public IEnumerable<Guid> FindMessagesToDispatch(int attemptThreshold = 10)
         {
-            if (_currentTransactionId == null)
-            {
-                _currentTransactionId = Transaction.Current.TransactionInformation.LocalIdentifier;
-
-                Transaction.Current.TransactionCompleted += Current_TransactionCompleted;
-            }
-
-            if (_currentTransactionId != Transaction.Current.TransactionInformation.LocalIdentifier)
-            {
-                throw new InvalidOperationException("This Dispatcher is attached to a different transaction");
-            }
+            return _outboxRepository.GetMessagesToDispatch();
         }
 
-        private void Current_TransactionCompleted(object sender, TransactionEventArgs e)
-        {
-            DispatchPendingMessages();
-        }
-
-        private void DispatchMessage(Guid messageId)
+        public void DispatchMessage(Guid messageId)
         {
             using (var ts = new TransactionScope(
                 TransactionScopeOption.RequiresNew,
@@ -87,24 +66,11 @@ namespace ReliableDispatcher
                 {
                     if (!_outboxRepository.IsMessageInOutboxNonBlocking(messageId))
                     {
-                        throw new InvalidOperationException($"Error while trying to dispatch message [{ messageId }]. Message not in Outbox. Call AddMessage first.");
+                        throw new InvalidOperationException($"Error while trying to dispatch message [{ messageId }]. Message not in Outbox. Call CreateMessage first.");
                     }
                 }
 
                 ts.Complete();
-            }
-        }
-
-        private void DispatchPendingMessages()
-        {
-            Guid messageId;
-
-            while (_messagesToDispatch.TryDequeue(out messageId))
-            {
-                var messageIdToDispatch = messageId;
-
-                Task.Run(() => {
-                    DispatchMessage(messageIdToDispatch); });
             }
         }
     }
